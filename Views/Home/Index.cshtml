@@ -1,0 +1,26 @@
+﻿@{
+    ViewData["Title"] = "Video Chat";
+}
+
+<h1>@ViewData["Title"]</h1>
+
+<div>
+    <label for="username">Username:</label>
+    <input type="text" id="username" />
+</div>
+
+<div>
+    <label for="peerid">Peer ID:</label>
+    <input type="text" id="peerid" />
+</div>
+
+<button id="connect">Connect</button>
+<button id="disconnect">Disconnect</button>
+
+<div id="local-video"></div>
+<div id="remote-video"></div>
+
+@section Scripts {
+    <script src="~/lib/signalr/dist/browser/signalr.min.js"></script>
+    <script src="~/js/videochat.js"></script>
+}
