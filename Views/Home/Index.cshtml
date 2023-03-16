@@ -4,25 +4,22 @@
 
 <h1>@ViewData["Title"]</h1>
 
-<div>
-    <label for="username">Username:</label>
-    <input type="text" id="username" />
-</div>
 
-<div>
-    <label for="peerid">Peer ID:</label>
-    <input type="text" id="peerid" />
-</div>
-
-<button id="connect">Connect</button>
-<button id="disconnect">Disconnect</button>
-
-<video id="local-video"></video>
-<video id="remote-video"></video>
-
-
+ <div>
+  
+        <div>
+            <button id="connectButton" >Connect</button>
+            <button id="disconnectButton" disabled>Disconnect</button>
+        </div>
+        <div>
+            <video id="localVideo" autoplay muted></video>
+            <video id="remoteVideo" autoplay></video>
+        </div>
+    </div>
+    
 
 @section Scripts {
+     <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
     <script src="~/lib/signalr/dist/browser/signalr.min.js"></script>
     <script src="~/js/videochat.js"></script>
 }
