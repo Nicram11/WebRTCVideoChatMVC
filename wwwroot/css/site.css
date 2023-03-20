@@ -14,5 +14,27 @@ html {
 }
 
 body {
+
   margin-bottom: 60px;
+}
+
+video {
+    height: 400px;
+    width: 500px;
+    background-color:lightgray;
+    margin: 20px;
+    
+}
+
+section{
+    float:left;
+}
+
+section h3 {
+    text-align:center;
+  
+}
+
+main {
+    margin-top: 50px;
 }
