@@ -1,5 +1,6 @@
 ﻿"use strict"
 
+
 const connection = new signalR.HubConnectionBuilder()
     .withUrl("/videoChatHub")
     .configureLogging(signalR.LogLevel.Information)
@@ -7,37 +8,61 @@ const connection = new signalR.HubConnectionBuilder()
 
 connection.start();
 
-
-
+const roomInput = document.getElementById("roomId-input");
+const connectButton = document.getElementById("connectButton");
 const localVideo = document.getElementById("localVideo");
-let myVideoStream;
-let rtcConnection = new RTCPeerConnection(null)
-let mediaConstraints;
-createPeerConnection();
+let remoteVideo = document.getElementById("remoteVideo");
 
-navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-    .then(function (stream) {
-        localVideo.srcObject = stream;
-        myVideoStream = stream;
+let localStream;
+let remoteSteam;
 
-        rtcConnection.addStream(myVideoStream);
-    })
-    .catch(function (err) {
-        console.log("An error occurred: " + err);
-    });
+let rtcConnection;
+
+
+connectButton.addEventListener("click", function () {
+
+    let roomId = roomInput.value;
+
+    if (roomId) {
+        connection.invoke("JoinRoom", roomId);
+        createPeerConnection();
+
+        navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+            .then(function (stream) {
+                localVideo.srcObject = stream;
+                localStream = stream;
+
+                rtcConnection.addStream(localStream);
+            })
+            .catch(function (err) {
+                console.log("An error occurred: " + err);
+            });
+
+    }
+
+
+    
+
+});
+
+
+
 
 function createPeerConnection() {
     
+    rtcConnection = new RTCPeerConnection(null);
+    let roomId = roomInput.value;
+
 
     rtcConnection.onicecandidate = function (event) {
         if (event.candidate) {
             // send to peers over SignalR
-            connection.invoke("Send", JSON.stringify({ "candidate": event.candidate }));
+            connection.invoke("Send", JSON.stringify({ "candidate": event.candidate }), roomId);
         }
     }
 
     rtcConnection.onaddstream = function (event) {
-        let remoteVideo = document.getElementById("remoteVideo");
+  
 
         // Attach the stream to the Video element via adapter.js
         if (!remoteVideo.paused) {
@@ -54,7 +79,7 @@ function createPeerConnection() {
                 return rtcConnection.setLocalDescription(offer)
             })
             .then(function () {
-                connection.invoke("Send", JSON.stringify({ "sdp": rtcConnection.localDescription }))
+                connection.invoke("Send", JSON.stringify({ "sdp": rtcConnection.localDescription }), roomId)
             })
     }
 }
@@ -71,12 +96,13 @@ connection.on("Receive", data => {
                     return navigator.mediaDevices.getUserMedia({ video: true, audio: true });
                 })
                 .then(function (stream) {
+
                     let remoteVideo = document.getElementById("localVideo");
-                    myVideoStream = stream;
+                    localStream = stream;
                 
                     remoteVideo.srcObject = stream
                     // Add our stream to the connection to be shared
-                    rtcConnection.addStream(myVideoStream);
+                    rtcConnection.addStream(localStream);
                 })
                 .then(function () {
                     return rtcConnection.createAnswer()
@@ -85,7 +111,7 @@ connection.on("Receive", data => {
                     return rtcConnection.setLocalDescription(answer);
                 })
                 .then(function () {
-                    connection.invoke("Send", JSON.stringify({ 'sdp': rtcConnection.localDescription }))
+                    connection.invoke("Send", JSON.stringify({ 'sdp': rtcConnection.localDescription }), roomInput.value)
                 })
         }
         else if (message.sdp.type == 'answer') {
