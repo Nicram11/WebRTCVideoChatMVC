@@ -15,13 +15,13 @@ let remoteVideo = document.getElementById("remoteVideo");
 
 let localStream;
 let remoteSteam;
-
-let rtcConnection;
+let roomId;
+let rtcPeerConnection;
 
 
 connectButton.addEventListener("click", function () {
 
-    let roomId = roomInput.value;
+    roomId = roomInput.value;
 
     if (roomId) {
         connection.invoke("JoinRoom", roomId);
@@ -31,8 +31,9 @@ connectButton.addEventListener("click", function () {
             .then(function (stream) {
                 localVideo.srcObject = stream;
                 localStream = stream;
-
-                rtcConnection.addStream(localStream);
+                remoteVideo.play();
+                //rtcPeerConnection.addStream(localStream);
+                stream.getTracks().forEach(track => rtcPeerConnection.addTrack(track));
             })
             .catch(function (err) {
                 console.log("An error occurred: " + err);
@@ -50,21 +51,16 @@ connectButton.addEventListener("click", function () {
 
 function createPeerConnection() {
     
-    rtcConnection = new RTCPeerConnection(null);
-    let roomId = roomInput.value;
+    rtcPeerConnection = new RTCPeerConnection(null);
 
-
-    rtcConnection.onicecandidate = function (event) {
+    rtcPeerConnection.onicecandidate = function (event) {
         if (event.candidate) {
-            // send to peers over SignalR
             connection.invoke("Send", JSON.stringify({ "candidate": event.candidate }), roomId);
         }
     }
 
-    rtcConnection.onaddstream = function (event) {
-  
+    rtcPeerConnection.onaddstream = function (event) {
 
-        // Attach the stream to the Video element via adapter.js
         if (!remoteVideo.paused) {
             remoteVideo.pause();
         }
@@ -73,13 +69,27 @@ function createPeerConnection() {
         remoteVideo.play();
     }
 
-    rtcConnection.onnegotiationneeded = function () {
-        rtcConnection.createOffer()
+    /*rtcPeerConnection.ontrack = (ev) => {
+        ev.streams.forEach((stream) => doAddStream(stream));
+    };*/
+
+    rtcPeerConnection.ontrack = (event) => {
+
+        if (event.streams[0]) {
+            remoteSteam = event.streams[0];
+            remoteVideo.srcObject = event.streams[0];
+        }
+    }
+
+
+    rtcPeerConnection.onnegotiationneeded = function () {
+        rtcPeerConnection.createOffer()
             .then(function (offer) {
-                return rtcConnection.setLocalDescription(offer)
+                return rtcPeerConnection.setLocalDescription(offer)
             })
             .then(function () {
-                connection.invoke("Send", JSON.stringify({ "sdp": rtcConnection.localDescription }), roomId)
+                console.log(JSON.stringify({ "sdp": rtcPeerConnection.localDescription }));
+                connection.invoke("Send", JSON.stringify({ "sdp": rtcPeerConnection.localDescription }), roomId)
             })
     }
 }
@@ -90,8 +100,8 @@ connection.on("Receive", data => {
 
     if (message.sdp) {
         if (message.sdp.type == 'offer') {
-            createPeerConnection()
-            rtcConnection.setRemoteDescription(new RTCSessionDescription(message.sdp))
+            createPeerConnection();
+            rtcPeerConnection.setRemoteDescription(new RTCSessionDescription(message.sdp))
                 .then(function () {
                     return navigator.mediaDevices.getUserMedia({ video: true, audio: true });
                 })
@@ -100,24 +110,25 @@ connection.on("Receive", data => {
                     let remoteVideo = document.getElementById("localVideo");
                     localStream = stream;
                 
-                    remoteVideo.srcObject = stream
-                    // Add our stream to the connection to be shared
-                    rtcConnection.addStream(localStream);
+                    remoteVideo.srcObject = stream;
+                    remoteVideo.play();
+                    stream.getTracks().forEach(track => rtcPeerConnection.addTrack(track));
+                    //rtcPeerConnection.addStream(localStream);
                 })
                 .then(function () {
-                    return rtcConnection.createAnswer()
+                    return rtcPeerConnection.createAnswer();
                 })
                 .then(function (answer) {
-                    return rtcConnection.setLocalDescription(answer);
+                    return rtcPeerConnection.setLocalDescription(answer);
                 })
                 .then(function () {
-                    connection.invoke("Send", JSON.stringify({ 'sdp': rtcConnection.localDescription }), roomInput.value)
+                    connection.invoke("Send", JSON.stringify({ 'sdp': rtcPeerConnection.localDescription }), roomId);
                 })
         }
         else if (message.sdp.type == 'answer') {
-            rtcConnection.setRemoteDescription(new RTCSessionDescription(message.sdp))
+            rtcPeerConnection.setRemoteDescription(new RTCSessionDescription(message.sdp));
         }
     } else if (message.candidate) {
-        rtcConnection.addIceCandidate(new RTCIceCandidate(message.candidate));
+        rtcPeerConnection.addIceCandidate(new RTCIceCandidate(message.candidate));
     }
 });
