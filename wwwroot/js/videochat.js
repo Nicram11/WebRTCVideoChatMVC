@@ -1,17 +1,10 @@
 ﻿"use strict"
 
 
-const connection = new signalR.HubConnectionBuilder()
-    .withUrl("/videoChatHub")
-    .configureLogging(signalR.LogLevel.Information)
-    .build();
-
-connection.start();
-
 const roomInput = document.getElementById("roomId-input");
 const connectButton = document.getElementById("connectButton");
 const localVideo = document.getElementById("localVideo");
-let remoteVideo = document.getElementById("remoteVideo");
+const remoteVideo = document.getElementById("remoteVideo");
 
 let localStream;
 let remoteStream;
@@ -19,8 +12,18 @@ let roomId;
 let rtcPeerConnection;
 
 
-connectButton.addEventListener("click", function () {
+const connection = new signalR.HubConnectionBuilder()
+    .withUrl("/videoChatHub")
+    .configureLogging(signalR.LogLevel.Information)
+    .build();
 
+connection.start();
+
+
+
+connectButton.addEventListener("click", connect);
+
+function connect() {
     roomId = roomInput.value;
 
     if (roomId) {
@@ -28,113 +31,89 @@ connectButton.addEventListener("click", function () {
         createPeerConnection();
 
         navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-            .then(function (stream) {
-                localVideo.srcObject = stream;
-                localStream = stream;
-                remoteVideo.load();
-                //rtcPeerConnection.addStream(localStream);
-             //   stream.getTracks().forEach(track => rtcPeerConnection.addTrack(track));
-
-                rtcPeerConnection.addTrack(stream.getVideoTracks()[0], localStream);
-                rtcPeerConnection.addTrack(stream.getAudioTracks()[0], localStream);
-            })
-            .catch(function (err) {
-                console.log("An error occurred: " + err);
-            });
-
+            .then(handleStream)
+            .catch(handleError);
     }
+}
 
-
-    
-
-});
-
-
+function handleStream(stream) {
+    localVideo.srcObject = stream;
+    localStream = stream;
+    remoteVideo.load();
+    rtcPeerConnection.addTrack(stream.getVideoTracks()[0], localStream);
+    rtcPeerConnection.addTrack(stream.getAudioTracks()[0], localStream);
+}
 
 
 function createPeerConnection() {
-    
     rtcPeerConnection = new RTCPeerConnection(null);
 
-    rtcPeerConnection.onicecandidate = function (event) {
-        if (event.candidate) {
-            connection.invoke("Send", JSON.stringify({ "candidate": event.candidate }), roomId);
-        }
-    }
-
-    /*rtcPeerConnection.onaddstream = function (event) {
-
-        if (remoteVideo.readyState < 3) {
-            remoteVideo.srcObject = event.stream;
-
-            remoteVideo.play();
-        }
-        
-    }*/
-
-    /*rtcPeerConnection.ontrack = (ev) => {
-        ev.streams.forEach((stream) => doAddStream(stream));
-    };*/
-
-    rtcPeerConnection.ontrack = (event) => {
-
-        if (event.streams[0]) {
-            remoteStream = event.streams[0];
-            remoteVideo.srcObject = remoteStream;
-     
-        }
-    }
+    rtcPeerConnection.onicecandidate = handleIceCandidate;
+    rtcPeerConnection.ontrack = handleTrackEvent;
+    rtcPeerConnection.onnegotiationneeded = handleNegotiationNeededEvent;
+}
 
 
-    rtcPeerConnection.onnegotiationneeded = function () {
-        rtcPeerConnection.createOffer()
-            .then(function (offer) {
-                return rtcPeerConnection.setLocalDescription(offer)
-            })
-            .then(function () {
-                console.log(JSON.stringify({ "sdp": rtcPeerConnection.localDescription }));
-                connection.invoke("Send", JSON.stringify({ "sdp": rtcPeerConnection.localDescription }), roomId)
-            })
+function handleIceCandidate(event) {
+    if (event.candidate) {
+        connection.invoke("Send", JSON.stringify({ "candidate": event.candidate }), roomId);
     }
 }
 
 
-connection.on("Receive", data => {
+function handleTrackEvent(event) {
+    if (event.streams[0]) {
+        remoteStream = event.streams[0];
+        remoteVideo.srcObject = remoteStream;
+    }
+}
+
+
+function handleNegotiationNeededEvent() {
+    rtcPeerConnection.createOffer()
+        .then((offer) => rtcPeerConnection.setLocalDescription(offer))
+        .then(() => connection.invoke("Send", JSON.stringify({ "sdp": rtcPeerConnection.localDescription }), roomId));
+}
+
+
+function handleReceiveEvent(data) {
     var message = JSON.parse(data)
 
     if (message.sdp) {
+
         if (message.sdp.type == 'offer') {
             createPeerConnection();
-            rtcPeerConnection.setRemoteDescription(new RTCSessionDescription(message.sdp))
-                .then(function () {
-                    return navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-                })
-                .then(function (stream) {
 
-                    let remoteVideo = document.getElementById("localVideo");
-                    remoteStream = stream;
-                
-                    remoteVideo.srcObject = stream;
-                    remoteVideo.play();
-                   // stream.getTracks().forEach(track => rtcPeerConnection.addTrack(track));
-                    rtcPeerConnection.addTrack(stream.getVideoTracks()[0], localStream);
-                    rtcPeerConnection.addTrack(stream.getAudioTracks()[0], localStream);
-                    //rtcPeerConnection.addStream(localStream);
-                })
-                .then(function () {
-                    return rtcPeerConnection.createAnswer();
-                })
-                .then(function (answer) {
-                    return rtcPeerConnection.setLocalDescription(answer);
-                })
-                .then(function () {
-                    connection.invoke("Send", JSON.stringify({ 'sdp': rtcPeerConnection.localDescription }), roomId);
-                })
+            rtcPeerConnection
+                .setRemoteDescription(new RTCSessionDescription(message.sdp))
+                .then(() => navigator.mediaDevices.getUserMedia({ video: true, audio: true }))
+                .then(handleUserMedia)
+                .then(() => rtcPeerConnection.createAnswer())
+                .then((answer) => rtcPeerConnection.setLocalDescription(answer))
+                .then(() => connection.invoke("Send", JSON.stringify({ 'sdp': rtcPeerConnection.localDescription }), roomId));
         }
         else if (message.sdp.type == 'answer') {
             rtcPeerConnection.setRemoteDescription(new RTCSessionDescription(message.sdp));
         }
-    } else if (message.candidate) {
+
+    }
+    else if (message.candidate) {
         rtcPeerConnection.addIceCandidate(new RTCIceCandidate(message.candidate));
     }
-});
+}
+
+
+function handleUserMedia(stream) {
+   
+    remoteStream = stream;
+    localVideo.srcObject = stream;
+    localVideo.play();
+    rtcPeerConnection.addTrack(stream.getVideoTracks()[0], localStream);
+    rtcPeerConnection.addTrack(stream.getAudioTracks()[0], localStream);
+}
+
+function handleError(error) {
+    console.log(error);
+}
+
+connection.on("Receive", handleReceiveEvent);
