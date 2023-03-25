@@ -14,7 +14,7 @@ const localVideo = document.getElementById("localVideo");
 let remoteVideo = document.getElementById("remoteVideo");
 
 let localStream;
-let remoteSteam;
+let remoteStream;
 let roomId;
 let rtcPeerConnection;
 
@@ -31,9 +31,12 @@ connectButton.addEventListener("click", function () {
             .then(function (stream) {
                 localVideo.srcObject = stream;
                 localStream = stream;
-                remoteVideo.play();
+                remoteVideo.load();
                 //rtcPeerConnection.addStream(localStream);
-                stream.getTracks().forEach(track => rtcPeerConnection.addTrack(track));
+             //   stream.getTracks().forEach(track => rtcPeerConnection.addTrack(track));
+
+                rtcPeerConnection.addTrack(stream.getVideoTracks()[0], localStream);
+                rtcPeerConnection.addTrack(stream.getAudioTracks()[0], localStream);
             })
             .catch(function (err) {
                 console.log("An error occurred: " + err);
@@ -59,15 +62,15 @@ function createPeerConnection() {
         }
     }
 
-    rtcPeerConnection.onaddstream = function (event) {
+    /*rtcPeerConnection.onaddstream = function (event) {
 
-        if (!remoteVideo.paused) {
-            remoteVideo.pause();
+        if (remoteVideo.readyState < 3) {
+            remoteVideo.srcObject = event.stream;
+
+            remoteVideo.play();
         }
-        remoteVideo.srcObject = event.stream;
         
-        remoteVideo.play();
-    }
+    }*/
 
     /*rtcPeerConnection.ontrack = (ev) => {
         ev.streams.forEach((stream) => doAddStream(stream));
@@ -76,8 +79,9 @@ function createPeerConnection() {
     rtcPeerConnection.ontrack = (event) => {
 
         if (event.streams[0]) {
-            remoteSteam = event.streams[0];
-            remoteVideo.srcObject = event.streams[0];
+            remoteStream = event.streams[0];
+            remoteVideo.srcObject = remoteStream;
+     
         }
     }
 
@@ -108,11 +112,13 @@ connection.on("Receive", data => {
                 .then(function (stream) {
 
                     let remoteVideo = document.getElementById("localVideo");
-                    localStream = stream;
+                    remoteStream = stream;
                 
                     remoteVideo.srcObject = stream;
                     remoteVideo.play();
-                    stream.getTracks().forEach(track => rtcPeerConnection.addTrack(track));
+                   // stream.getTracks().forEach(track => rtcPeerConnection.addTrack(track));
+                    rtcPeerConnection.addTrack(stream.getVideoTracks()[0], localStream);
+                    rtcPeerConnection.addTrack(stream.getAudioTracks()[0], localStream);
                     //rtcPeerConnection.addStream(localStream);
                 })
                 .then(function () {
